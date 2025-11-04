@@ -1,0 +1,1 @@
+# UAS-Kapita-Selekta-Analitika-Data
