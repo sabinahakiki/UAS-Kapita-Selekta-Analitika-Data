@@ -1,4 +1,5 @@
 # import_students.py
+import os
 import pandas as pd
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,7 @@ from modules.items.models import Student
 Base.metadata.create_all(bind=engine)
 
 CSV_PATH = "data/students_kaggle.csv"
+USE_FAKE_NAMES = os.getenv("USE_FAKE_NAMES", "1") == "1"
 
 def to_int(v):
     if pd.isna(v):
@@ -23,6 +25,44 @@ def to_str(v):
     if pd.isna(v):
         return None
     return str(v)
+
+# 50 x 100 = 5000 unique name combinations to cover the full dataset deterministically
+FIRST_NAMES = [
+    "Liam","Noah","Oliver","Elijah","James","William","Benjamin","Lucas","Henry","Alexander",
+    "Mason","Michael","Ethan","Daniel","Jacob","Logan","Jackson","Levi","Sebastian","Mateo",
+    "Jack","Owen","Theodore","Aiden","Samuel","Joseph","John","David","Wyatt","Matthew",
+    "Luke","Asher","Carter","Julian","Grayson","Leo","Jayden","Gabriel","Isaac","Lincoln",
+    "Anthony","Hudson","Dylan","Ezra","Thomas","Charles","Christopher","Jaxon","Maverick","Josiah",
+]
+LAST_NAMES = [
+    "Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez",
+    "Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin",
+    "Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson",
+    "Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores",
+    "Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell","Carter","Roberts",
+    "Gomez","Phillips","Evans","Turner","Diaz","Parker","Cruz","Edwards","Collins","Reyes",
+    "Stewart","Morris","Morales","Murphy","Cook","Rogers","Gutierrez","Ortiz","Morgan","Cooper",
+    "Peterson","Bailey","Reed","Kelly","Howard","Ramos","Kim","Cox","Ward","Richardson",
+    "Watson","Brooks","Chavez","Wood","James","Bennett","Gray","Mendoza","Ruiz","Hughes",
+    "Price","Alvarez","Castillo","Sanders","Patel","Myers","Long","Ross","Foster","Jimenez",
+]
+
+def generate_fake_identity(student_id: str):
+    """
+    Deterministically generate a unique first/last/email per student_id
+    so names do not repeat between records while staying reproducible.
+    """
+    # Extract numeric part; fallback to hash-like mod if missing digits
+    digits = "".join(ch for ch in str(student_id) if ch.isdigit())
+    idx = int(digits) if digits else abs(hash(student_id))
+
+    # Map index into the name grid
+    first = FIRST_NAMES[idx % len(FIRST_NAMES)]
+    last = LAST_NAMES[(idx // len(FIRST_NAMES)) % len(LAST_NAMES)]
+
+    # Tie email to student_id to avoid collisions if names wrap
+    email = f"{first.lower()}.{last.lower()}_{str(student_id).lower()}@example.edu"
+    return first, last, email
 
 def import_students():
     df = pd.read_csv(CSV_PATH)
@@ -56,11 +96,23 @@ def import_students():
     db: Session = SessionLocal()
     try:
         for _, row in df.iterrows():
+            student_id = to_str(row.get("student_id"))
+
+            if USE_FAKE_NAMES:
+                fake_first, fake_last, fake_email = generate_fake_identity(student_id)
+                first_name = fake_first
+                last_name = fake_last
+                email = fake_email
+            else:
+                first_name = to_str(row.get("first_name"))
+                last_name = to_str(row.get("last_name"))
+                email = to_str(row.get("email"))
+
             student = Student(
-                student_id=to_str(row.get("student_id")),
-                first_name=to_str(row.get("first_name")),
-                last_name=to_str(row.get("last_name")),
-                email=to_str(row.get("email")),
+                student_id=student_id,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
                 gender=to_str(row.get("gender")),
                 age=to_int(row.get("age")),
                 department=to_str(row.get("department")),
