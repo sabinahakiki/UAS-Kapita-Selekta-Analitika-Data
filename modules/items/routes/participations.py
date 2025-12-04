@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from auth import get_current_admin
+from auth import get_current_admin, get_current_student
 from database import get_db
 from modules.items.models import Student
 
@@ -117,3 +117,20 @@ def participations_bad(
 ):
     filters = [Student.participation_score < AVERAGE_MIN_PERCENT]
     return _category_response(db, filters, "bad (<2.0 on 0-6 scale)")
+
+@router.get("/me")
+def participations_me(
+    db: Session = Depends(get_db),
+    current_student: Student = Depends(get_current_student),
+):
+    student = db.query(Student).filter(Student.id == current_student.id).first()
+    if not student or student.participation_score is None:
+        return {
+            "student_id": current_student.student_id,
+            "name": _student_payload(current_student)["name"],
+            "participation_score": None,
+            "participation_level_0_6": None,
+            "note": "No participation score recorded.",
+        }
+
+    return _student_payload(student)

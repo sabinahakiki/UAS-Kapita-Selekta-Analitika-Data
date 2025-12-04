@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from auth import get_current_admin
+from auth import get_current_admin, get_current_student
 from database import get_db
 from modules.items.models import Student
 
@@ -239,6 +239,9 @@ def activity_correlation_final_score(
     db: Session = Depends(get_db),
     current_admin: dict = Depends(get_current_admin),
 ):
+    return _activity_correlation_final_score(db)
+
+def _activity_correlation_final_score(db: Session):
     records = db.query(
         Student.quizzes_avg,
         Student.study_hours_per_week,
@@ -339,3 +342,120 @@ def low_activity_students(
         "low_students": low_students,
         "total_flagged": len(low_students),
     }
+
+def _percent_change(old, new):
+    if old is None or new is None or old == 0:
+        return None
+    return ((new - old) / old) * 100
+
+@router.get("/activity-trend")
+def activity_trend(
+    top_n: int = 10,
+    db: Session = Depends(get_db),
+    current_admin: dict = Depends(get_current_admin),
+):
+    students = (
+        db.query(Student)
+        .filter(Student.midterm_score.isnot(None), Student.final_score.isnot(None))
+        .all()
+    )
+
+    records = []
+    deltas = []
+    for s in students:
+        delta = float(s.final_score) - float(s.midterm_score)
+        deltas.append(delta)
+        records.append({
+            "id": s.id,
+            "student_id": s.student_id,
+            "name": _name(s),
+            "midterm_score": _to_float(s.midterm_score),
+            "final_score": _to_float(s.final_score),
+            "delta_score": _to_float(delta),
+            "percent_change": _to_float(_percent_change(s.midterm_score, s.final_score)),
+        })
+
+    improving = [r for r in records if r["delta_score"] is not None and r["delta_score"] > 0]
+    declining = [r for r in records if r["delta_score"] is not None and r["delta_score"] < 0]
+
+    improving_sorted = sorted(improving, key=lambda r: r["delta_score"], reverse=True)[:top_n]
+    declining_sorted = sorted(declining, key=lambda r: r["delta_score"])[:top_n]
+
+    return {
+        "note": "Midterm vs Final score used as proxy for trend across semester.",
+        "count": len(records),
+        "mean_delta": _to_float(_mean(deltas)),
+        "median_delta": _to_float(_percentile(deltas, 0.5)),
+        "improving_count": len(improving),
+        "declining_count": len(declining),
+        "top_improving": improving_sorted,
+        "top_declining": declining_sorted,
+    }
+
+@router.get("/activity-trend/{student_id}")
+def activity_trend_student(
+    student_id: str,
+    db: Session = Depends(get_db),
+    current_admin: dict = Depends(get_current_admin),
+):
+    student = db.query(Student).filter(Student.student_id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if student.midterm_score is None or student.final_score is None:
+        raise HTTPException(status_code=400, detail="Student missing midterm or final score for trend analysis")
+
+    delta = float(student.final_score) - float(student.midterm_score)
+
+    return {
+        "student_id": student.student_id,
+        "name": _name(student),
+        "midterm_score": _to_float(student.midterm_score),
+        "final_score": _to_float(student.final_score),
+        "delta_score": _to_float(delta),
+        "percent_change": _to_float(_percent_change(student.midterm_score, student.final_score)),
+        "context_metrics": {
+            "attendance_percent": _to_float(student.attendance_percent),
+            "study_hours_per_week": _to_float(student.study_hours_per_week),
+            "quizzes_avg": _to_float(student.quizzes_avg),
+            "sleep_hours_per_night": _to_float(student.sleep_hours_per_night),
+            "extracurricular_activities": student.extracurricular_activities,
+        },
+        "note": "Midterm vs Final score used as proxy for trend across semester.",
+    }
+
+@router.get("/study-duration/me")
+def study_duration_me(
+    db: Session = Depends(get_db),
+    current_student: Student = Depends(get_current_student),
+):
+    student = db.query(Student).filter(Student.id == current_student.id).first()
+    if not student or student.study_hours_per_week is None:
+        return {
+            "student_id": current_student.student_id,
+            "name": _name(current_student),
+            "study_hours_per_week": None,
+            "attendance_percent": _to_float(student.attendance_percent) if student else None,
+            "midterm_score": _to_float(student.midterm_score) if student else None,
+            "final_score": _to_float(student.final_score) if student else None,
+            "note": "No study hours recorded.",
+        }
+
+    return {
+        "student_id": student.student_id,
+        "name": _name(student),
+        "study_hours_per_week": _to_float(student.study_hours_per_week),
+        "attendance_percent": _to_float(student.attendance_percent),
+        "midterm_score": _to_float(student.midterm_score),
+        "final_score": _to_float(student.final_score),
+        "grade": student.grade,
+        "stress_level": _to_float(student.stress_level),
+        "sleep_hours_per_night": _to_float(student.sleep_hours_per_night),
+    }
+
+@router.get("/activity-correlation/final-score/me")
+def activity_correlation_final_score_me(
+    db: Session = Depends(get_db),
+    current_student: Student = Depends(get_current_student),
+):
+    # Reuse aggregate correlation but restrict access via student JWT
+    return _activity_correlation_final_score(db)

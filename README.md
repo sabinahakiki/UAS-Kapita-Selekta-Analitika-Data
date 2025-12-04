@@ -14,57 +14,69 @@ FastAPI service for managing student records and running simple learning-activit
 - Python 3.10+
 - MySQL instance you can reach from the app (local or remote)
 
-## Quickstart
-1. Create and activate a virtual environment.
-
+## Quickstart (umum)
+1. Buat dan aktifkan virtual environment.
    ```bash
    python -m venv venv
    source venv/bin/activate  # Windows: venv\\Scripts\\activate
    ```
-
 2. Install dependencies.
-
    ```bash
    pip install -r requirements.txt
    ```
-
-3. Copy `.env.example` to `.env` and update the values for your environment.
-
+3. Salin `.env.example` ke `.env` lalu sesuaikan kredensial DB dan secret.
    ```bash
    cp .env.example .env
-   # export variables for this shell
+   # ekspor variabel untuk shell saat ini (bash/zsh)
    set -a; source .env; set +a
    ```
-
-4. Ensure your MySQL server is running and that the database in `.env` exists (the tables are auto-created on startup).
-5. (Optional) Import the sample Kaggle dataset to populate student rows.
-
+4. Pastikan MySQL berjalan dan DB yang dirujuk di `.env` sudah ada (tabel otomatis dibuat saat start).
+5. (Opsional) Import dataset Kaggle:
    ```bash
    python import_students.py
    ```
-
-6. Run the API.
-
+6. Jalankan API:
    ```bash
    uvicorn main:app --reload
    ```
-
-   The interactive docs are available at `http://localhost:8000/docs`.
-
+   Docs interaktif: `http://localhost:8000/docs`.
 
 
 
 
 
-## macOS setup (Homebrew)
-1. Install Python 3.12: `brew install python@3.12` (or use pyenv with 3.12).
-2. Clone the repo and enter it: `git clone <repo> && cd <repo>`.
-3. Copy env vars: `cp .env.example .env` then edit with your MySQL creds (`127.0.0.1` host recommended).
-4. Create/activate a venv with the Homebrew Python: `python3.12 -m venv .venv && source .venv/bin/activate`.
-5. Install deps (includes uvicorn and cryptography for MySQL auth): `pip install --upgrade pip setuptools wheel && pip install -r requirements.txt`.
-6. Export env for the shell: `set -a; source .env; set +a`.
-7. Run optional seed: `python import_students.py`.
-8. Start the API: `python -m uvicorn main:app --reload`.
+
+## Menjalankan di macOS (Homebrew)
+1. Install Python 3.12: `brew install python@3.12` (atau pakai pyenv 3.12).
+2. Clone repo dan masuk: `git clone <repo> && cd <repo>`.
+3. Salin env: `cp .env.example .env` lalu edit MySQL creds (`127.0.0.1` disarankan).
+4. Buat/aktifkan venv: `python3.12 -m venv .venv && source .venv/bin/activate`.
+5. Install deps: `pip install --upgrade pip setuptools wheel && pip install -r requirements.txt`.
+6. Export env: `set -a; source .env; set +a`.
+7. (Opsional) Seed data: `python import_students.py`.
+8. Start API: `uvicorn main:app --reload`.
+
+## Menjalankan di Windows (Command Prompt/PowerShell)
+1. Pastikan Python 3.10+ terpasang dan ada di PATH.
+2. Clone repo dan masuk foldernya.
+3. Salin env: `copy .env.example .env` lalu edit kredensial MySQL.
+4. Buat/aktifkan venv:
+   - Command Prompt: `python -m venv venv` lalu `venv\Scripts\activate`
+   - PowerShell: `python -m venv venv` lalu `.\venv\Scripts\Activate.ps1`
+5. Install deps: `pip install --upgrade pip setuptools wheel && pip install -r requirements.txt`.
+6. Set env (contoh Command Prompt):
+   ```bat
+   for /f "tokens=1,2 delims==" %i in (.env) do set %i=%j
+   ```
+   PowerShell:
+   ```powershell
+   Get-Content .env | ForEach-Object {
+     if ($_ -match "^(.*?)=(.*)$") { [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2]) }
+   }
+   ```
+   Atau set manual variabel penting (MYSQL_*, JWT_SECRET_KEY, dll.).
+7. (Opsional) Seed data: `python import_students.py`.
+8. Jalankan API: `uvicorn main:app --reload`.
 
 
 
@@ -77,13 +89,26 @@ FastAPI service for managing student records and running simple learning-activit
 
 ## Available endpoints (high level)
 - `POST /auth/login`, `GET /auth/me`
-- `GET /students/` (list, admin), `GET /students/id/{id}` (admin), `GET /students/{student_id}` (self or admin)
-- `POST /students/` (create student, admin)
-- `POST /students/{student_id}/password` (set student password, admin)
-- Analytics (admin):
-  - `GET /analytics/study-duration`
-  - `GET /analytics/study-duration/{department}`
-  - `GET /analytics/study-duration/{department}/{student_name}`
+- CRUD mahasiswa:
+  - `GET /students` (admin) – daftar mahasiswa.
+  - `GET /students/id/{id}` (admin) – detail via primary key.
+  - `GET /students/{student_id}` (admin atau student diri sendiri) – detail via student_id.
+  - `POST /students` (admin) – tambah mahasiswa (opsional set password langsung).
+  - `POST /students/{student_id}/password` (admin) – set/reset password mahasiswa.
+- Partisipasi:
+  - `GET /participations` (admin) – daftar partisipasi + rata-rata, skala 0–6.
+  - `GET /participations/good|average|bad` (admin) – filter partisipasi (>=75%, 33–75%, <33%).
+  - `GET /participations/me` (student) – partisipasi diri sendiri.
+- Analitik belajar & aktivitas:
+  - `GET /analytics/study-duration` (admin) – rata-rata jam belajar keseluruhan & per jurusan.
+  - `GET /analytics/study-duration/{department}` (admin) – detail jam belajar + metrik terkait di jurusan.
+  - `GET /analytics/study-duration/{department}/{student_name}` (admin) – cari mahasiswa di jurusan.
+  - `GET /analytics/study-duration/me` (student) – jam belajar & metrik terkait diri sendiri.
+  - `GET /analytics/activity-correlation/final-score` (admin) – korelasi Pearson antara final_score dan aktivitas (quizzes, study hours, attendance, sleep, ekstra).
+  - `GET /analytics/activity-correlation/final-score/me` (student) – melihat hasil korelasi agregat.
+  - `GET /analytics/low-activity` (admin) – identifikasi mahasiswa aktivitas rendah konsisten (ambang persentil 25, min_low_metrics dapat diatur).
+  - `GET /analytics/activity-trend` (admin) – tren midterm → final (top improving/declining).
+  - `GET /analytics/activity-trend/{student_id}` (admin) – tren midterm → final per mahasiswa.
 
 ## Environment variables
 Configure these in `.env` (or your process manager):
