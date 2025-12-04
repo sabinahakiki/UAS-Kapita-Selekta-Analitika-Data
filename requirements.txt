@@ -1,9 +1,13 @@
+# App & API
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
+# Data & DB
 SQLAlchemy==2.0.30
 pymysql==1.1.1
 pandas==2.2.2
+# Auth & security (pastikan terpasang di macOS juga)
 passlib[bcrypt]==1.7.4
 PyJWT==2.8.0
-python-multipart==0.0.9
 cryptography==43.0.1
+# Uploads/form handling
+python-multipart==0.0.9
