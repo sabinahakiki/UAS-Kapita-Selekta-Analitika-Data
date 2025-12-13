@@ -76,6 +76,53 @@ def study_duration(
         ],
     }
 
+@router.get("/final-grade/me")
+def final_grade_me(
+    db: Session = Depends(get_db),
+    current_student: Student = Depends(get_current_student),
+):
+    student = db.query(Student).filter(Student.id == current_student.id).first()
+    if not student:
+        return {
+            "student_id": current_student.student_id,
+            "name": _name(current_student),
+            "final_score": None,
+            "midterm_score": None,
+            "assignments_avg": None,
+            "quizzes_avg": None,
+            "participation_score": None,
+            "projects_score": None,
+            "total_score": None,
+            "activity_grades": {
+                "study_hours_per_week": None,
+                "extracurricular_activities": None,
+                "stress_level": None,
+            },
+            "note": "Student not found.",
+        }
+
+    payload = {
+        "student_id": student.student_id,
+        "name": _name(student),
+        "final_score": _to_float(student.final_score),
+        "midterm_score": _to_float(student.midterm_score),
+        "assignments_avg": _to_float(student.assignments_avg),
+        "quizzes_avg": _to_float(student.quizzes_avg),
+        "participation_score": _to_float(student.participation_score),
+        "projects_score": _to_float(student.projects_score),
+        "total_score": _to_float(student.total_score),
+        "activity_grades": {
+            "study_hours_per_week": _to_float(student.study_hours_per_week),
+            "extracurricular_activities": student.extracurricular_activities,
+            "stress_level": _to_float(student.stress_level),
+        },
+    }
+
+    if student.final_score is None and student.total_score is None:
+        payload["note"] = "No final grade recorded."
+
+    return payload
+
 @router.get("/study-duration/{department}")
 def study_duration_by_department(
     department: str,
@@ -422,40 +469,3 @@ def activity_trend_student(
         },
         "note": "Midterm vs Final score used as proxy for trend across semester.",
     }
-
-@router.get("/study-duration/me")
-def study_duration_me(
-    db: Session = Depends(get_db),
-    current_student: Student = Depends(get_current_student),
-):
-    student = db.query(Student).filter(Student.id == current_student.id).first()
-    if not student or student.study_hours_per_week is None:
-        return {
-            "student_id": current_student.student_id,
-            "name": _name(current_student),
-            "study_hours_per_week": None,
-            "attendance_percent": _to_float(student.attendance_percent) if student else None,
-            "midterm_score": _to_float(student.midterm_score) if student else None,
-            "final_score": _to_float(student.final_score) if student else None,
-            "note": "No study hours recorded.",
-        }
-
-    return {
-        "student_id": student.student_id,
-        "name": _name(student),
-        "study_hours_per_week": _to_float(student.study_hours_per_week),
-        "attendance_percent": _to_float(student.attendance_percent),
-        "midterm_score": _to_float(student.midterm_score),
-        "final_score": _to_float(student.final_score),
-        "grade": student.grade,
-        "stress_level": _to_float(student.stress_level),
-        "sleep_hours_per_night": _to_float(student.sleep_hours_per_night),
-    }
-
-@router.get("/activity-correlation/final-score/me")
-def activity_correlation_final_score_me(
-    db: Session = Depends(get_db),
-    current_student: Student = Depends(get_current_student),
-):
-    # Reuse aggregate correlation but restrict access via student JWT
-    return _activity_correlation_final_score(db)
