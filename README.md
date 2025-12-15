@@ -97,15 +97,14 @@ FastAPI service for managing student records and running simple learning-activit
   - `POST /students/{student_id}/password` (admin) – set/reset password mahasiswa.
 - Partisipasi:
   - `GET /participations` (admin) – daftar partisipasi + rata-rata, skala 0–6.
-  - `GET /participations/good|average|bad` (admin) – filter partisipasi (>=75%, 33–75%, <33%).
+  - `GET /participations/very-good|good|average|bad` (admin) – filter partisipasi (>=90%, 89-75%, 74–50%, <50%).
   - `GET /participations/me` (student) – partisipasi diri sendiri.
 - Analitik belajar & aktivitas:
   - `GET /analytics/study-duration` (admin) – rata-rata jam belajar keseluruhan & per jurusan.
   - `GET /analytics/study-duration/{department}` (admin) – detail jam belajar + metrik terkait di jurusan.
   - `GET /analytics/study-duration/{department}/{student_name}` (admin) – cari mahasiswa di jurusan.
-  - `GET /analytics/study-duration/me` (student) – jam belajar & metrik terkait diri sendiri.
+  - `GET /analytics/final-grade/me` (student) – recap nilai studi mahasiswa.
   - `GET /analytics/activity-correlation/final-score` (admin) – korelasi Pearson antara final_score dan aktivitas (quizzes, study hours, attendance, sleep, ekstra).
-  - `GET /analytics/activity-correlation/final-score/me` (student) – melihat hasil korelasi agregat.
   - `GET /analytics/low-activity` (admin) – identifikasi mahasiswa aktivitas rendah konsisten (ambang persentil 25, min_low_metrics dapat diatur).
   - `GET /analytics/activity-trend` (admin) – tren midterm → final (top improving/declining).
   - `GET /analytics/activity-trend/{student_id}` (admin) – tren midterm → final per mahasiswa.
